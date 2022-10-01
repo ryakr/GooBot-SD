@@ -2056,7 +2056,7 @@ async def on_message(message):
 async def on_ready():
     print('Loading old buttons back into memory')
     now = int(time.time())
-    forty_eight_hours_ago = now - 1 * 24 * 60 * 60
+    forty_eight_hours_ago = now - 1 * 4 * 60 * 60
     # init the button handler and load up any previously saved buttons. Skip
     # any buttons that are more than 48 hours old.
     for view_dict in tqdm(button_store_dict[BUTTON_STORE_FOUR_IMAGES_BUTTONS_KEY]):
