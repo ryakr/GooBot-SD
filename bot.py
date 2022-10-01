@@ -47,6 +47,10 @@ parser.add_argument('--hours-on-server-to-use', dest='hours_needed', nargs='?',
     required=False)
 parser.add_argument('-g', '--guild', dest='guild',
     help='Discord guild ID', type=int, required=False)
+parser.add_argument('--force_nukelist', dest='nukelist',
+    action=argparse.BooleanOptionalAction)
+parser.add_argument('--force_watermark', dest='watermark',
+    action=argparse.BooleanOptionalAction)
 parser.add_argument('--nsfw-auto-spoiler', dest='auto_spoiler',
     action=argparse.BooleanOptionalAction)
 parser.add_argument('--nsfw-prompt-detection',
@@ -135,6 +139,10 @@ VALID_IMAGE_HEIGHT_WIDTH = { 384, 416, 448, 480, 512, 544, 576, 608, 640, 672,
     704, 736, 768 }
 VALID_TAG_CONCEPTS = {}
 
+nukelist= [['zoo','beastiality'],['zoo','bestiality'],['nudity','cub'],['nudity','young'],['penis','cub'],['penis','young'],['penis','child'],['nudity','child']]
+regexs = []
+with open('./regex.txt','r', encoding="utf8") as f:
+    regexs = f.read().splitlines()
 
 def short_id_generator():
     return ''.join(random.choices(string.ascii_lowercase +
@@ -262,8 +270,15 @@ def prompt_contains_nsfw(prompt):
             results['identity_attack'] > 0.5:
             return True
 
-    if len(nsfw_wordlist) == 0:
+    if len(nsfw_wordlist) and not args.nukelist == 0:
         return False
+    for regex in regexs:
+        tester = re.compile(regex.strip('\n'))
+        print(regex.strip('\n'))
+        nsfw = re.search(tester,prompt)
+        if nsfw:
+            print(nsfw)
+            return True
     return any(word in prompt.lower() for word in nsfw_wordlist)
 
 
@@ -300,12 +315,53 @@ def seed_from_docarray_id(docarray_id):
     return None
 
 
-def to_discord_file_and_maybe_check_safety(img_loc):
+def to_discord_file_and_maybe_check_safety(img_loc, watermark, grid_size):
     nsfw = False
     if args.auto_spoiler:
         nsfw = check_safety(img_loc)
+    if args.watermark or watermark:
+        back = Image.open(img_loc)
+        filename, file_extension = os.path.splitext(img_loc)
+        back = back.convert("RGBA")
+        width, height = back.size
+        watermarked = Image.open("./watermark.png")
+        width1, height1 = watermarked.size
+        watermarked = watermarked.convert("RGBA")
+        if grid_size == 4:
+            offsetBR = ((width - width1), (height - height1))
+            offsetBL = (((width//2) - width1) , (height - height1))
+            offsetTL = (((width//2) - width1) , ((height//2) - height1))
+            offsetTR = (((width) - width1) , ((height//2) - height1))
+            back.paste(watermarked, offsetBR, watermarked)
+            back.paste(watermarked, offsetBL, watermarked)
+            back.paste(watermarked, offsetTL, watermarked)
+            back.paste(watermarked, offsetTR, watermarked)
+        if grid_size == 1 or grid_size == 9:
+            offset = ((width - width1), (height - height1))
+            back.paste(watermarked, offset, watermarked)
+        if grid_size == 8:
+            offsetBR = ((width - width1), (height - height1))
+            offsetBM = ((width//2), (height - height1))
+            offsetMR = ((width - width1), int((height//2.5) - height1))
+            offsetMM = ((width//2), int((height//2.5) - height1))
+            offsetML = (((width//3) - width1), int((height//2.5) - height1))
+            offsetBL = (((width//3) - width1) , (height - height1))
+            offsetTL = (((width//3) - width1) , ((height//3) - height1))
+            offsetTM = ((width//2), ((height//3) - height1))
+            offsetTR = (((width) - width1) , ((height//3) - height1))
+            back.paste(watermarked, offsetBR, watermarked)
+            back.paste(watermarked, offsetBM, watermarked)
+            back.paste(watermarked, offsetBL, watermarked)
+            back.paste(watermarked, offsetMR, watermarked)
+            back.paste(watermarked, offsetMM, watermarked)
+            back.paste(watermarked, offsetML, watermarked)
+            back.paste(watermarked, offsetTM, watermarked)
+            back.paste(watermarked, offsetTL, watermarked)
+            back.paste(watermarked, offsetTR, watermarked)
+        if file_extension == '.jpg':
+            back = back.convert("RGB")
+        back.save(img_loc)
     return discord.File(img_loc, spoiler=nsfw)
-
 
 async def check_user_joined_at(
     channel: discord.abc.GuildChannel,
@@ -401,6 +457,7 @@ class FourImageButtons(discord.ui.View):
     short_id_parent = None
     strength = None
     pixels_width = 512
+    watermark = True
     def __init__(
         self,
         *,
@@ -410,6 +467,7 @@ class FourImageButtons(discord.ui.View):
         short_id_parent: str|None=None,
         strength: float|None=None,
         timeout=None,
+        watermark=True
     ):
         super().__init__(timeout=timeout)
         self.idx_parent = idx_parent
@@ -419,6 +477,7 @@ class FourImageButtons(discord.ui.View):
         self.short_id = short_id
         self.short_id_parent = short_id_parent
         self.strength = strength
+        self.watermark=watermark
 
         self.pixels_width, self.pixels_height = self.original_image_sizes()
 
@@ -554,7 +613,8 @@ class FourImageButtons(discord.ui.View):
             seed=random.randint(1, 2 ** 32 - 1),
             steps=steps,
             strength=strength,
-            width=self.pixels_width)
+            width=self.pixels_width,
+            watermark=self.watermark,)
 
     async def handle_retry(self,
         interaction: discord.Interaction,
@@ -612,7 +672,7 @@ class FourImageButtons(discord.ui.View):
     ):
         await interaction.response.defer()
         completed = await _upscale(interaction.channel, interaction.user,
-            self.short_id, idx)
+            self.short_id, idx, watermark=self.watermar)
 
         if completed:
             button.disabled = True
@@ -810,6 +870,7 @@ async def _image(
     seed_search: bool=None,
     steps: Optional[int]=args.default_steps,
     width: Optional[int]=None,
+    watermark: bool=None,
 ):
     global currently_fetching_ai_image
     author_id = str(user.id)
@@ -885,7 +946,10 @@ async def _image(
         short_id = output['id']
         seeds = output.get('seeds', None)
 
-        file = to_discord_file_and_maybe_check_safety(image_loc)
+        if seed_search:
+            file = to_discord_file_and_maybe_check_safety(image_loc, watermark, 9)
+        else:
+            file = to_discord_file_and_maybe_check_safety(image_loc, watermark, 4)
         if seed_search is True:
             seed_lst = []
             for i, _s in enumerate(seeds):
@@ -957,6 +1021,7 @@ async def image(
     seed_search: Optional[bool]=False,
     steps: Optional[app_commands.Range[int, MIN_STEPS, MAX_STEPS]] = None,
     width: Optional[app_commands.Choice[int]] = None,
+    watermark: Optional[bool]=True,
 ):
     await interaction.response.defer(thinking=True)
 
@@ -972,7 +1037,8 @@ async def image(
         seed=seed,
         seed_search=bool(seed_search),
         steps=steps,
-        width=width.value if width is not None else None)
+        width=width.value if width is not None else None,
+        watermark=watermark)
     if sid is not None:
         await interaction.followup.send(sid)
     else:
@@ -997,6 +1063,7 @@ async def _riff(
     steps: Optional[int]=args.default_steps,
     strength: Optional[float]=None,
     width: Optional[int]=None,
+    watermark: bool=True,
 ):
     global currently_fetching_ai_image
     author_id = str(user.id)
@@ -1072,7 +1139,7 @@ async def _riff(
         image_loc = output['image_loc']
         short_id = output['id']
 
-        file = to_discord_file_and_maybe_check_safety(image_loc)
+        file = to_discord_file_and_maybe_check_safety(image_loc, watermark, 4)
         btns = FourImageButtons(message_id=work_msg.id, idx_parent=idx,
             short_id=short_id, short_id_parent=docarray_id)
         btns.serialize_to_json_and_store()
@@ -1144,6 +1211,7 @@ async def riff(
     steps: Optional[app_commands.Range[int, MIN_STEPS, MAX_STEPS]] = None,
     strength: Optional[app_commands.Range[float, MIN_STRENGTH, MAX_STRENGTH]] = None,
     width: Optional[app_commands.Choice[int]] = None,
+    watermark: Optional[bool]=True,
 ):
     await interaction.response.defer(thinking=True)
 
@@ -1163,7 +1231,8 @@ async def riff(
         seed=seed,
         steps=steps,
         strength=strength,
-        width=width.value if width is not None else None)
+        width=width.value if width is not None else None,
+        watermark=watermark)
     if sid is not None:
         await interaction.followup.send(sid)
     else:
@@ -1205,6 +1274,7 @@ async def image2image(
     steps: Optional[app_commands.Range[int, MIN_STEPS, MAX_STEPS]] = None,
     strength: Optional[app_commands.Range[float, MIN_STRENGTH, MAX_STRENGTH]] = None,
     width: Optional[app_commands.Choice[int]] = None,
+    watermark: Optional[bool]=True,
 ):
     await interaction.response.defer(thinking=True)
 
@@ -1259,7 +1329,8 @@ async def image2image(
         seed=seed,
         steps=steps,
         strength=strength,
-        width=width.value if width is not None else None)
+        width=width.value if width is not None else None,
+        watermark=watermark)
     if sid is not None:
         await interaction.followup.send(sid)
     else:
@@ -1281,6 +1352,7 @@ async def _interpolate(
     steps: Optional[int]=args.default_steps,
     strength: Optional[float]=None,
     width: Optional[int]=None,
+    watermark: Optional[bool]=True,
 ):
     global currently_fetching_ai_image
     author_id = str(user.id)
@@ -1355,7 +1427,7 @@ async def _interpolate(
         image_loc = output['image_loc']
         short_id = output['id']
 
-        file = to_discord_file_and_maybe_check_safety(image_loc)
+        file = to_discord_file_and_maybe_check_safety(image_loc, watermark, 9)
         work_msg = await work_msg.edit(
             content=f'Image generation for interpolate on `{prompt1}` to `{prompt2}` for <@{author_id}> complete. The ID for your new images is `{short_id}`.',
             attachments=[file])
@@ -1412,6 +1484,7 @@ async def interpolate(
     steps: Optional[app_commands.Range[int, MIN_STEPS, MAX_STEPS]] = None,
     strength: Optional[app_commands.Range[float, MIN_STRENGTH, MAX_STRENGTH]] = None,
     width: Optional[app_commands.Choice[int]] = None,
+    watermark: Optional[bool]=True,
 ):
     await interaction.response.defer(thinking=True)
 
@@ -1441,6 +1514,7 @@ async def _upscale(
 
     docarray_id: str,
     idx: int,
+    watermark: bool
 ):
     global currently_fetching_ai_image
     author_id = str(user.id)
@@ -1486,7 +1560,7 @@ async def _upscale(
             raise Exception(err)
         image_loc = output['image_loc']
 
-        file = to_discord_file_and_maybe_check_safety(image_loc)
+        file = to_discord_file_and_maybe_check_safety(image_loc, watermark, 1)
         work_msg = await work_msg.edit(
             content=f'Image generation for upscale on `{docarray_id}` index {str(idx)} for <@{author_id}> complete.',
             attachments=[file])
@@ -1514,6 +1588,7 @@ async def upscale(
     interaction: discord.Interaction,
     docarray_id: str,
     idx: app_commands.Range[int, 0, NUM_IMAGES_MAX-1],
+    watermark: bool,
 ):
     await interaction.response.defer(thinking=True)
 
