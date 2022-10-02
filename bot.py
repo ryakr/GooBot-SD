@@ -672,7 +672,7 @@ class FourImageButtons(discord.ui.View):
     ):
         await interaction.response.defer()
         completed = await _upscale(interaction.channel, interaction.user,
-            self.short_id, idx, watermark=self.watermar)
+            self.short_id, idx, watermark=self.watermark)
 
         if completed:
             button.disabled = True
