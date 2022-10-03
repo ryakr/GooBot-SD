@@ -139,10 +139,103 @@ VALID_IMAGE_HEIGHT_WIDTH = { 384, 416, 448, 480, 512, 544, 576, 608, 640, 672,
     704, 736, 768 }
 VALID_TAG_CONCEPTS = {}
 
+userdict = {}
 nukelist= [['zoo','beastiality'],['zoo','bestiality'],['nudity','cub'],['nudity','young'],['penis','cub'],['penis','young'],['penis','child'],['nudity','child']]
 regexs = []
 with open('./regex.txt','r', encoding="utf8") as f:
     regexs = f.read().splitlines()
+
+def check_place_in_queue(UserID, action):
+    if action == 'riff':
+        if UserID in userdict:
+            currenttime = int(time.time())
+            switch = 0
+            if userdict[UserID][2] == 0 and userdict[UserID][3] == 0:
+                switch = 1
+                diff = 0
+            elif userdict[UserID][3] == 0:
+                switch = 2
+                diff = (currenttime - userdict[UserID][2])/60
+            else:
+                switch = 3
+                diff = (currenttime - userdict[UserID][3])/60
+            if diff >= 1:
+                print("OVERTIME")
+                userdict[UserID][0] = 0
+                userdict[UserID][2] = 0
+                userdict[UserID][3] = 0
+            print(diff)
+            if userdict[UserID][0] >= 2:
+                return False
+            count = userdict[UserID][0]
+            userdict[UserID][0] = count + 1
+            print(diff)
+            if switch == 2:
+                userdict[UserID][3] = currenttime
+            else:
+                userdict[UserID][2] = currenttime
+            return True
+        else:
+            userdict[UserID] = [1,0,int(time.time()),0,0,0]
+            return True
+    elif action == 'gen':
+        if UserID in userdict:
+            currenttime = int(time.time())
+            switch = 0
+            if userdict[UserID][4] == 0 and userdict[UserID][5] == 0:
+                switch = 1
+                diff = 0
+            elif userdict[UserID][5] == 0:
+                switch = 2
+                diff = (currenttime - userdict[UserID][4])/60
+            else:
+                switch = 3
+                diff = (currenttime - userdict[UserID][5])/60
+            if diff >= 1:
+                print("OVERTIME")
+                userdict[UserID][1] = 0
+                userdict[UserID][4] = 0
+                userdict[UserID][5] = 0
+            if userdict[UserID][1] >= 2:
+                return False
+            count = userdict[UserID][1]
+            userdict[UserID][1] = count + 1
+            if switch == 2:
+                userdict[UserID][4] = currenttime
+            else:
+                userdict[UserID][5] = currenttime
+            return True
+        else:
+            userdict[UserID] = [0,1,0,0,int(time.time()),0]
+            return True
+    elif action == 'fin_riff':
+        if UserID in userdict:
+            if userdict[UserID][0] <= 0:
+                return True
+            count = userdict[UserID][0]
+            if count == 2:
+                userdict[UserID][3] = 0
+            else:
+                userdict[UserID][2] = 0
+            userdict[UserID][0] = count - 1
+            return True
+        else:
+            print('This shouldnt happen')
+            return True
+    elif action == 'fin_gen':
+        if UserID in userdict:
+            if userdict[UserID][0] <= 0:
+                return True
+            count = userdict[UserID][0]
+            if count == 2:
+                userdict[UserID][5] = 0
+            else:
+                userdict[UserID][4] = 0
+            userdict[UserID][0] = count - 1
+            return True
+        else:
+            print('This shouldnt happen')
+            return True
 
 def short_id_generator():
     return ''.join(random.choices(string.ascii_lowercase +
@@ -875,6 +968,10 @@ async def _image(
     global currently_fetching_ai_image
     author_id = str(user.id)
 
+    if not check_place_in_queue(user.id, 'gen'):
+        channel.send(f'You already have 2 generations in queue @<{user.id}>, please wait until one or both finishes')
+        return
+
     if args.restrict_all_to_channel:
         if channel.id != args.restrict_all_to_channel:
             await channel.send('You are not allowed to use this in this channel!')
@@ -950,6 +1047,7 @@ async def _image(
             file = to_discord_file_and_maybe_check_safety(image_loc, watermark, 9)
         else:
             file = to_discord_file_and_maybe_check_safety(image_loc, watermark, 4)
+        check_place_in_queue(user.id, 'fin_gen')
         if seed_search is True:
             seed_lst = []
             for i, _s in enumerate(seeds):
@@ -1068,6 +1166,10 @@ async def _riff(
     global currently_fetching_ai_image
     author_id = str(user.id)
 
+    if not check_place_in_queue(user.id, 'riff'):
+        channel.send(f'You already have 2 riffs in queue @<{user.id}>, please wait until one or both finishes')
+        return
+
     if args.restrict_all_to_channel:
         if channel.id != args.restrict_all_to_channel:
             await channel.send('You are not allowed to use this in this channel!')
@@ -1140,6 +1242,7 @@ async def _riff(
         short_id = output['id']
 
         file = to_discord_file_and_maybe_check_safety(image_loc, watermark, 4)
+        check_place_in_queue(user.id, 'fin_riff')
         btns = FourImageButtons(message_id=work_msg.id, idx_parent=idx,
             short_id=short_id, short_id_parent=docarray_id)
         btns.serialize_to_json_and_store()
@@ -1360,6 +1463,10 @@ async def _interpolate(
     prompt1 = prompt1.strip()
     prompt2 = prompt2.strip()
 
+    if not check_place_in_queue(user.id, 'gen'):
+        channel.send(f'You already have 2 generations in queue @<{user.id}>, please wait until one or both finishes')
+        return
+
     if args.restrict_all_to_channel:
         if channel.id != args.restrict_all_to_channel:
             await channel.send('You are not allowed to use this in this channel!')
@@ -1428,6 +1535,7 @@ async def _interpolate(
         short_id = output['id']
 
         file = to_discord_file_and_maybe_check_safety(image_loc, watermark, 9)
+        check_place_in_queue(user.id, 'fin_gen')
         work_msg = await work_msg.edit(
             content=f'Image generation for interpolate on `{prompt1}` to `{prompt2}` for <@{author_id}> complete. The ID for your new images is `{short_id}`.',
             attachments=[file])
@@ -2065,6 +2173,7 @@ async def on_ready():
             client.add_view(view, message_id=view_dict['message_id'])
 
     print('Bot is alive')
+
 
 
 client.run(args.token)
