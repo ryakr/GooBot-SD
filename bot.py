@@ -969,7 +969,7 @@ async def _image(
     author_id = str(user.id)
 
     if not check_place_in_queue(user.id, 'gen'):
-        channel.send(f'You already have 2 generations in queue @<{user.id}>, please wait until one or both finishes')
+        await channel.send(f'You already have 2 generations in queue @<{user.id}>, please wait until one or both finishes')
         return
 
     if args.restrict_all_to_channel:
@@ -1167,7 +1167,7 @@ async def _riff(
     author_id = str(user.id)
 
     if not check_place_in_queue(user.id, 'riff'):
-        channel.send(f'You already have 2 riffs in queue @<{user.id}>, please wait until one or both finishes')
+        await channel.send(f'You already have 2 riffs in queue @<{user.id}>, please wait until one or both finishes')
         return
 
     if args.restrict_all_to_channel:
@@ -1464,7 +1464,7 @@ async def _interpolate(
     prompt2 = prompt2.strip()
 
     if not check_place_in_queue(user.id, 'gen'):
-        channel.send(f'You already have 2 generations in queue @<{user.id}>, please wait until one or both finishes')
+        await channel.send(f'You already have 2 generations in queue @<{user.id}>, please wait until one or both finishes')
         return
 
     if args.restrict_all_to_channel:
