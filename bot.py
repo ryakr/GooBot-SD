@@ -148,6 +148,13 @@ with open('./regex.txt','r', encoding="utf8") as f:
 def check_place_in_queue(UserID, action):
     if action == 'riff':
         if UserID in userdict:
+            if userdict[UserID][0] >= 1:
+                if userdict[UserID][2] == 0 and userdict[UserID][3] == 0:
+                    print('if')
+                    userdict[UserID][0] = 0
+            if userdict[UserID][0] >= 2:
+                if userdict[UserID][2] == 0 or userdict[UserID][3] == 0:
+                    userdict[UserID][0] = 0
             currenttime = int(time.time())
             switch = 0
             if userdict[UserID][2] == 0 and userdict[UserID][3] == 0:
@@ -164,7 +171,7 @@ def check_place_in_queue(UserID, action):
                 userdict[UserID][0] = 0
                 userdict[UserID][2] = 0
                 userdict[UserID][3] = 0
-            print(diff)
+            print(userdict[UserID][0])
             if userdict[UserID][0] >= 2:
                 return False
             count = userdict[UserID][0]
@@ -180,6 +187,14 @@ def check_place_in_queue(UserID, action):
             return True
     elif action == 'gen':
         if UserID in userdict:
+            if userdict[UserID][0] >= 1:
+                if userdict[UserID][2] == 0 and userdict[UserID][3] == 0:
+                    print('if')
+                    userdict[UserID][0] = 0
+            if userdict[UserID][0] >= 2:
+                if userdict[UserID][2] == 0 or userdict[UserID][3] == 0:
+                    userdict[UserID][0] = 0
+            currenttime = int(time.time())
             currenttime = int(time.time())
             switch = 0
             if userdict[UserID][4] == 0 and userdict[UserID][5] == 0:
@@ -201,9 +216,9 @@ def check_place_in_queue(UserID, action):
             count = userdict[UserID][1]
             userdict[UserID][1] = count + 1
             if switch == 2:
-                userdict[UserID][4] = currenttime
-            else:
                 userdict[UserID][5] = currenttime
+            else:
+                userdict[UserID][4] = currenttime
             return True
         else:
             userdict[UserID] = [0,1,0,0,int(time.time()),0]
@@ -213,25 +228,29 @@ def check_place_in_queue(UserID, action):
             if userdict[UserID][0] <= 0:
                 return True
             count = userdict[UserID][0]
-            if count == 2:
+            if count > 1:
                 userdict[UserID][3] = 0
             else:
                 userdict[UserID][2] = 0
             userdict[UserID][0] = count - 1
+            if userdict[UserID][1] == 0 and userdict[UserID][0] == 0:
+                userdict.pop(UserID, None)
             return True
         else:
             print('This shouldnt happen')
             return True
     elif action == 'fin_gen':
         if UserID in userdict:
-            if userdict[UserID][0] <= 0:
+            if userdict[UserID][1] <= 0:
                 return True
-            count = userdict[UserID][0]
-            if count == 2:
+            count = userdict[UserID][1]
+            if count > 1:
                 userdict[UserID][5] = 0
             else:
                 userdict[UserID][4] = 0
-            userdict[UserID][0] = count - 1
+            userdict[UserID][1] = count - 1
+            if userdict[UserID][1] == 0 and userdict[UserID][0] == 0:
+                userdict.pop(UserID, None)
             return True
         else:
             print('This shouldnt happen')
